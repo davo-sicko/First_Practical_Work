@@ -1,41 +1,110 @@
-import './App.css'
-import ProductCard from './ProductCard';
+import { BrowserRouter, Routes, Route, NavLink, Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import "./App.css";
+import { ThemeProvider, useTheme } from "./ThemeContext";
+import { AuthProvider, useAuth } from "./AuthContext";
+import { CartProvider, useCart } from "./CartContext";
+import Home from "./Home";
+import Cart from "./Cart";
+import Login from "./Login";
+import Dashboard from "./Dashboard";
+import AdminPage from "./AdminPage";
+import { api } from "./api/client";
 
-function App(){
-  return(
-    <div>
-      <ProductCard name="iPhone DUO" price="500000" img="https://msk.hi-stores.ru/upload/iblock/f7a/liax3gq5vegvf5qoqg6pmng2c6wnb3ko.jpg"/>
-      <ProductCard name="Свитшот Stone Island" price="5000" img="https://yesoriginal.com.ua/media/cache/catalog/products/bb/65/da/90094354-2344006-1600x1684_-jpg-84.webp"/>
-      <ProductCard name="Iphone 16" price="60000" img="https://www.backmarket.co.uk/cdn-cgi/image/format%3Dauto%2Cquality%3D75%2Cwidth%3D260/https://d2e6ccujb3mkqf.cloudfront.net/ad6dc074-aa15-4f0a-bc2f-a4211fee9aec-1_e1d10d0e-6c08-4e4e-9663-34cabd03b624.jpg"/>
-      <ProductCard name="Huawei Matebook D16" price="65000" img="https://img01.huaweifile.com/eu/uk/huawei/pms/uomcdn/GBHW/pms/202501/gbom/6942103142871/800_800_1E706E6D3ED724048E179B08CE1A0144mp.png"/>
-      <ProductCard name="Airpods Pro 2" price="20000" img="https://m.media-amazon.com/images/I/61sRKTAfrhL._AC_UF350,350_QL80_.jpg"/>
+function MaintenancePage() {
+  return (
+    <div className="page">
+      <h2>Сервис временно недоступен</h2>
+      <p className="muted">Ведутся технические работы. Попробуйте зайти позже.</p>
     </div>
   );
 }
 
-// function Welcome(props){
-//   return <h1> Привет, {props.name}!</h1>
-// }
+function Layout() {
+  const { theme, toggleTheme } = useTheme();
+  const { user } = useAuth();
+  const { count } = useCart();
+  const [backendOnline, setBackendOnline] = useState(null);
 
-// function App() {
-//   const [message, setMessage] = useState("Нажми кнопку");
+  useEffect(() => {
+    let active = true;
+    const checkBackend = () => {
+      api.health()
+        .then(() => { if (active) setBackendOnline(true); })
+        .catch(() => { if (active) setBackendOnline(false); });
+    };
+    checkBackend();
+    const intervalId = window.setInterval(checkBackend, 5000);
+    return () => {
+      active = false;
+      window.clearInterval(intervalId);
+    };
+  }, []);
 
-//   function handleClick(){
-//     setMessage("Кнопка была нажата!");
-//   }
-//   return(
-//     <div>
-//       <h1>Привет, React!</h1>
-//       <p>Мое первое приложение</p>
-//       <Welcome name="Алекс"/>
-//       <Welcome name="Мария"/>
-      
-//       <div>
-//         <h1>{message}</h1>
-//         <button onClick={handleClick}>Click!</button>
-//       </div>
-//         <Counter/>
-//     </div>
-//   )
-// }
-export default App;
+  if (backendOnline === null) {
+    return <div className={`layout ${theme}`}><div className="state-message">Проверка соединения с сервером...</div></div>;
+  }
+
+  if (!backendOnline) {
+    return (
+      <div className={`layout ${theme}`}>
+        <header className="header">
+        </header>
+        <MaintenancePage />
+      </div>
+    );
+  }
+
+  const navClass = ({ isActive }) => (isActive ? "nav-link active" : "nav-link");
+
+  return (
+    <div className={`layout ${theme}`}>
+      <header className="header">
+        <nav className="nav">
+          <NavLink to="/" end className={navClass}>Каталог</NavLink>
+          {user?.role !== "admin" && (
+            <NavLink to="/cart" className={navClass}>
+              Корзина {count > 0 && <span className="badge">{count}</span>}
+            </NavLink>
+          )}
+          {user ? (
+            <>
+              <NavLink to="/dashboard" className={navClass}>Кабинет</NavLink>
+              {user.role === "admin" && <NavLink to="/admin" className={navClass}>Админ</NavLink>}
+            </>
+          ) : (
+            <NavLink to="/login" className={navClass}>Вход</NavLink>
+          )}
+        </nav>
+        <div className="header-actions">
+          <button onClick={toggleTheme}>
+            {theme === "dark" ? "Светлая тема" : "Тёмная тема"}
+          </button>
+        </div>
+      </header>
+
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/cart" element={<Cart />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/admin" element={<AdminPage />} />
+        <Route path="*" element={<div className="page"><h2>404 — Страница не найдена</h2></div>} />
+      </Routes>
+    </div>
+  );
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <AuthProvider>
+        <CartProvider>
+          <ThemeProvider>
+            <Layout />
+          </ThemeProvider>
+        </CartProvider>
+      </AuthProvider>
+    </BrowserRouter>
+  );
+}
